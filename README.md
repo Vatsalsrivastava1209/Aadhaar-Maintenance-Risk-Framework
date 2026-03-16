@@ -70,4 +70,4 @@ Uidai-project/
 Feedback / collaboration welcome!  
 VaTsaL (@Codat_V) On X | Open to data analytics/science roles
 
-#data-science #aadhaar #uidai #hackathon #python #plotly
+#data-science #aadhaar #DataAnalytics #hackathon #python #plotly
