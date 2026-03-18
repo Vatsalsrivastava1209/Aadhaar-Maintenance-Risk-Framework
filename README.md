@@ -11,7 +11,7 @@ High-enrolment districts suffer low update rates → stale biometric/demographic
 - **District-level aggregation** via pincode mapping
 - **Composite Risk Index**: Enrolment volume + update rate + age-group balance
 - **K-means clustering** → 4 archetypes (High-Growth Low-Maintenance, etc.)
-- **NITI Aayog validation** — correlation with Financial Inclusion progress
+- **NITI Aayog validation** - correlation with Financial Inclusion progress
 - **Prophet forecasting** for future backlog trends
 - **Interactive dashboard** (ipywidgets + Plotly choropleth)
 
@@ -29,7 +29,7 @@ High-enrolment districts suffer low update rates → stale biometric/demographic
 *Forecasting future update demand to predict potential system backlogs.*
 
 ### Key Insights
-- ~61% of analysed enrolments in priority archetypes needing urgent action
+- 61% of analysed enrolments in priority archetypes needing urgent action
 - Higher risk in Aspirational Districts (0.7904 vs 0.7819 avg risk score)
 - Negative correlation: Faster financial inclusion progress → lower maintenance risk
 - Forecast: Update demand growing → backlog risk rising without intervention
