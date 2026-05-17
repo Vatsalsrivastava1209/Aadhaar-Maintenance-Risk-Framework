@@ -1,0 +1,8 @@
+-r requirements.txt
+pytest~=9.0
+pytest-cov~=7.0
+ruff~=0.14.0
+black~=25.0
+nbstripout~=0.8
+pre-commit~=4.0
+papermill~=2.6  # used by CI to execute the notebook headless

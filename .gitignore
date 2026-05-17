@@ -1,5 +1,33 @@
+# IDE / OS
 .idea/
-.ipynb_checkpoints/
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Python
 __pycache__/
 *.pyc
+*.pyo
+.pytest_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+*.egg-info/
+.venv/
+venv/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Data (raw extracts are large + not for redistribution)
 datasets/
+
+# Scratch / backups
+_cells_dump.txt
+UIDAI Project.ipynb.bak
+*.bak
+
+# Claude Code session state
+.claude/

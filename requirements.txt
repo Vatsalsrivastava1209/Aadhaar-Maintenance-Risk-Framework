@@ -1,11 +1,17 @@
-pandas
-numpy
-scikit-learn
-prophet
-plotly
-ipywidgets
-matplotlib
-seaborn
-yellowbrick
-streamlit>=1.35.0
-altair>=5.0.0
+# Pinned versions to avoid Prophet/sklearn API drift breaking the notebook.
+# Loose-pinned with `~=` so patch updates are allowed but minor/major changes
+# (which historically have broken Prophet) are not.
+pandas~=2.2.0
+numpy~=2.2.0
+scipy~=1.17.0
+scikit-learn~=1.8.0
+prophet~=1.3.0
+plotly~=6.6.0
+statsmodels~=0.14.0   # needed for plotly's trendline="ols"
+ipywidgets~=8.1.0
+matplotlib~=3.10.0
+seaborn~=0.13.0
+streamlit~=1.49.0
+rapidfuzz~=3.14.0     # fuzzy district matching for NITI cross-reference
+
+# Dev / quality (install via: pip install -r requirements-dev.txt)

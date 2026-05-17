@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dev dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Lint (ruff)
+        run: ruff check utils/ tests/ tools/ app.py
+
+      - name: Run tests
+        run: pytest -q --cov=utils --cov-report=term-missing
+
+      - name: Notebook hygiene — outputs stripped?
+        # Notebook should stay <2MB; if it grows, someone forgot nbstripout.
+        run: |
+          size=$(stat -c%s "UIDAI Project.ipynb")
+          echo "Notebook size: $size bytes"
+          if [ "$size" -gt 2000000 ]; then
+            echo "::error::Notebook exceeds 2MB — did you commit with outputs? Run nbstripout."
+            exit 1
+          fi
+
+      - name: Notebook hygiene — no cells with outputs
+        run: |
+          python -c "
+          import json, sys
+          nb = json.load(open('UIDAI Project.ipynb', encoding='utf-8'))
+          dirty = [i for i, c in enumerate(nb['cells']) if c.get('outputs') or c.get('execution_count') is not None]
+          if dirty:
+              print(f'::error::Cells with outputs/execution_count: {dirty}')
+              sys.exit(1)
+          print(f'OK — {len(nb[\"cells\"])} cells, all stripped.')
+          "

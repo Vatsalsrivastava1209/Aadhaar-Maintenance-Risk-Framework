@@ -1,73 +1,166 @@
-# Aadhaar Identity Maintenance Risk Framework — UIDAI Hackathon Project
+# Aadhaar Identity Maintenance Risk Framework
 
-**Built for UIDAI Data Hackathon 2026**  
-District-level prioritization engine using Aadhaar enrolment/update data to identify high-risk areas for stale records and authentication failures.
+> District-level prioritisation engine that uses public Aadhaar
+> enrolment / update data to flag where stale records are most likely to
+> cause authentication failures and exclusion.
 
+[![CI](https://github.com/Vatsalsrivastava1209/Uidai-project/actions/workflows/ci.yml/badge.svg)](https://github.com/Vatsalsrivastava1209/Uidai-project/actions/workflows/ci.yml)
 
-### Problem
-High-enrolment districts suffer low update rates → stale biometric/demographic data → authentication failures, exclusion, governance risk.
+---
 
-### Solution
-- **District-level aggregation** via pincode mapping
-- **Composite Risk Index**: Enrolment volume + update rate + age-group balance
-- **K-means clustering** → 4 archetypes (High-Growth Low-Maintenance, etc.)
-- **NITI Aayog validation** - correlation with Financial Inclusion progress
-- **Prophet forecasting** for future backlog trends
-- **Interactive dashboard** (ipywidgets + Plotly choropleth)
+## The problem
 
-### Visual Analysis
-#### 1. District Risk Map (Choropleth)
-![District Risk Map](plots/maintenance_risk.png)
-*Geographic distribution of the Composite Risk Index across analyzed districts.*
+UIDAI publishes monthly enrolment and update data, but operationally the
+question for any state IT department is **"where do we send the next mobile
+update camp?"** Districts with high enrolment volume and a low update rate
+accumulate stale biometric / demographic records, which cause downstream
+authentication failures — and the people most affected are the ones who use
+Aadhaar most often for entitlements.
 
-#### 2. NITI Aayog Correlation & Trends
-![NITI Correlation](plots/niti_scatter.png)
-*Correlation between financial inclusion progress and Aadhaar maintenance risk.*
+The dataset answers "what's the volume" but not "where's the risk".
 
-#### 3. Backlog Forecasting (Prophet Model)
-![Prophet Forecast](plots/prophet_plot.png)
-*Forecasting future update demand to predict potential system backlogs.*
+## What this project does
 
-### Key Insights
-- 61% of analysed enrolments in priority archetypes needing urgent action
-- Higher risk in Aspirational Districts (0.7904 vs 0.7819 avg risk score)
-- Negative correlation: Faster financial inclusion progress → lower maintenance risk
-- Forecast: Update demand growing → backlog risk rising without intervention
+1. **Aggregates** enrolment, biometric, and demographic update records to the
+   district level via a pincode → district mapping.
+2. **Builds a composite risk index** with an explicit *Risk = P(failure) ×
+   Impact* decomposition so each component can be argued with separately.
+3. **Clusters** districts into archetypes on an enriched feature set
+   (log-enrolment, update rate, balance, bio/demo ratio, growth slope) that
+   does **not** reuse the index inputs — so the clusters describe something
+   the index doesn't already encode.
+4. **Forecasts** monthly update load per archetype with Prophet, and reports
+   the **rolling-horizon MAPE** so the forecast comes with an error bar
+   instead of a vibe.
+5. **Cross-validates against NITI Aayog** Aspirational Districts data using a
+   curated alias map + fuzzy district matching, with a Welch's t-test +
+   Hedges' *g* + 95% CI on the mean difference (not just two means quoted in
+   bold).
 
-### Tech Stack
-- Python: pandas, numpy, scikit-learn, Prophet, Plotly, ipywidgets
-- Jupyter Notebook: `UIDAI Project.ipynb`
-- Data: UIDAI anonymized enrolment/update CSVs + NITI Champions of Change (Financial Inclusion)
+## Headline findings
 
-### Repository Structure
+- **Risk concentrates outside the obvious places.** The composite index
+  reranks districts vs the naive `1 - update_rate` baseline; Spearman ρ and
+  top-20 overlap are reported in the notebook.
+- **Aspirational districts carry measurably higher maintenance risk.**
+  The notebook reports the t-statistic, p-value, effect size, and CI —
+  read the numbers before believing them.
+- **Update demand is rising, but the validated forecast horizon is short.**
+  Per-archetype MAPE is printed alongside every projection.
+
+## Tech stack
+
+| Layer | Choice | Why |
+|-------|--------|-----|
+| Aggregation | pandas | Standard |
+| Modelling   | scikit-learn (KMeans + sensitivity), Prophet | Interpretable, hackable, plays well with policy audiences |
+| Validation  | scipy.stats, rapidfuzz | Welch's t-test + alias-aware fuzzy matching |
+| Maps        | Plotly choropleth | One file, GitHub-renderable |
+| Demo        | Streamlit | One-command shareable app |
+| Hygiene     | ruff, pytest, nbstripout, pre-commit | Keeps the notebook reviewable |
+
+## Run it
+
+```bash
+# 1. Clone
+git clone https://github.com/Vatsalsrivastava1209/Uidai-project.git
+cd Uidai-project
+
+# 2. Install (pinned versions)
+pip install -r requirements.txt
+
+# 3a. The notebook
+jupyter lab "UIDAI Project.ipynb"
+
+# 3b. The Streamlit demo
+streamlit run app.py
+
+# 4. Tests + lint (dev workflow)
+pip install -r requirements-dev.txt
+pytest -q
+ruff check .
 ```
-Uidai-project/
-├── UIDAI Project.ipynb          # Main analysis notebook
-├── financial_inclusion.csv      # NITI Aayog data for validation
-├── pincode_directory.csv        # Pincode → district mapping
-├── india_districts.json         # GeoJSON for choropleth
-├── my_plot.png                  # Sample visualization
-├── utils/                       # Helper functions (config.py, helpers.py)
-└── README.md
+
+**Note on data**: the raw CSV folders under `datasets/` are gitignored
+because of size. The notebook documents the expected schema in cell 2;
+the same UIDAI public extracts you can pull from the official portal will
+plug in unchanged.
+
+## Repository layout
+
+```
+.
+├── UIDAI Project.ipynb       # Main analysis (stripped of outputs, ~56KB)
+├── app.py                    # Streamlit demo (uses utils/)
+├── utils/
+│   ├── config.py             # Tunable weights + thresholds
+│   └── helpers.py            # All numerical logic + sensitivity analysis
+├── tests/test_helpers.py     # Pytest cases for utils/
+├── tools/rewrite_notebook.py # Notebook surgery script (one-time)
+├── .github/workflows/ci.yml  # Lint + tests + notebook-size guard
+├── .pre-commit-config.yaml   # ruff + nbstripout
+├── ARCHITECTURE.md           # Productionisation story
+├── financial_inclusion.csv   # NITI Aayog reference
+├── pincode_directory.csv     # Pincode → district map
+├── india_districts.json      # GeoJSON for choropleth
+└── plots/                    # Exported figures (PNG)
 ```
 
-### How to Run
-1. Clone repo: `git clone https://github.com/Vatsalsrivastava1209/Uidai-project.git`
-2. Install dependencies: `pip install -r requirements.txt` 
-3. Open `UIDAI Project.ipynb` in Jupyter/Colab
-4. Run all cells (data files included)
+## Limitations
 
-### Results & Impact
-- Targeted policy blueprint for UIDAI: Mobile camps in high-risk archetypes
-- Scalable to other India Stack layers (GSTN, UPI, Ayushman Bharat)
-- Demonstrates end-to-end data science: cleaning → modeling → visualization → policy recommendation
+Read these before quoting the findings.
 
-### Future Work
-- Full national-scale deployment
-- Real-time monitoring dashboard
-- Anomaly detection for fraud patterns
+- **No ground-truth labels.** The risk index is built from operational
+  proxies (update rate, balance, volume), not from actual authentication
+  failure incidence. Without a labelled set of "districts where Aadhaar
+  failures occurred at rate X", the index is plausible but not validated.
+- **Weights are heuristic.** Composite weights in `utils/config.py` are
+  defensible defaults, not learned from data. The sensitivity analysis in
+  the notebook shows the *robustness* of rankings under ±15% jitter, but
+  cannot tell you the weights are *right*.
+- **District-name joins are imperfect.** Even with a curated alias map
+  plus rapidfuzz fallback, some NITI / Aadhaar district names do not
+  match cleanly. Coverage is reported in the notebook; a proper fix is to
+  migrate everything to LGD district codes.
+- **Forecast horizon is short.** Prophet CV is honest about MAPE per
+  archetype. Do not extrapolate beyond the validated horizon.
+- **Population denominator is missing.** Risk per capita would be more
+  honest than absolute volume — the index treats "high enrolment" as
+  impact rather than normalising by population. This is intentional for a
+  triage tool but should be acknowledged.
 
-Feedback / collaboration welcome!  
-VaTsaL (@Codat_V) On X | Open to data analytics/science roles
+## Ethical considerations
 
-#data-science #aadhaar #DataAnalytics #hackathon #python #plotly
+This project risk-scores **regions, not individuals**, and uses only
+aggregated public data. Even so:
+
+- **Stigmatisation risk**: any geographic risk model can be misused to
+  justify resource withdrawal from "risky" areas. The intended use is the
+  opposite — prioritise *more* outreach to high-risk districts.
+- **Disparate impact**: risk distributions should be audited by state,
+  urban / rural classification, and Scheduled-Area status to ensure the
+  model is not systematically over-flagging structurally disadvantaged
+  regions purely because of population density. `ARCHITECTURE.md`
+  describes the quarterly audit task.
+- **Privacy**: no PII is used or required. Inputs are public aggregates.
+
+## What I'd do with another two weeks
+
+1. **Acquire authentication-failure labels** from UIDAI ops and learn the
+   weights (logistic regression / gradient-boosted classifier) rather
+   than heuristically setting them.
+2. **Causal angle**: where mobile camps have been deployed historically,
+   estimate the lift on update rate using propensity-score matching or a
+   regression-discontinuity around the risk threshold.
+3. **Per-capita normalisation** using 2011 Census + extrapolated district
+   population, so "impact" is shifted from raw enrolment count to share
+   of population needing service.
+4. **Replace district-name joins with LGD codes** end-to-end.
+5. **Ship the FastAPI scoring service** sketched in `ARCHITECTURE.md`.
+
+## Acknowledgements
+
+UIDAI for the open enrolment/update data, NITI Aayog for the Champions of
+Change dashboard data, and India Post for the pincode directory.
+
+Issues / feedback welcome via GitHub.
