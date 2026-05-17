@@ -21,8 +21,14 @@ venv/
 # Jupyter
 .ipynb_checkpoints/
 
-# Data (raw extracts are large + not for redistribution)
-datasets/
+# Data (raw extracts are large + not for redistribution).
+# We ignore the three raw-extract subfolders individually so the small
+# anonymised sample under datasets/sample/ remains trackable.
+datasets/api_data_aadhar_enrolment/
+datasets/api_data_aadhar_biometric/
+datasets/api_data_aadhar_demographic/
+# never commit the audit file that links surrogate -> real pincodes
+datasets/sample/_anonymisation_audit.csv
 
 # Scratch / backups
 _cells_dump.txt

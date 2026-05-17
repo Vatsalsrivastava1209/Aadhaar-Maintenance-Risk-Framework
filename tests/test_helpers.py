@@ -18,6 +18,7 @@ from utils.helpers import (
     fuzzy_match_districts,
     label_archetypes,
     naive_baseline_risk,
+    risk_per_capita,
     sensitivity_rank_stability,
 )
 
@@ -132,6 +133,22 @@ class TestBaseline:
         df = pd.DataFrame({"update_rate": [-0.5, 1.5, 0.3]})
         base = naive_baseline_risk(df)
         assert base.between(0, 1).all()
+
+
+# ---------------------------------------------------------------------------
+# risk_per_capita
+# ---------------------------------------------------------------------------
+class TestRiskPerCapita:
+    def test_per_capita_equals_p_failure(self, toy_district_df):
+        out = calculate_risk_index(toy_district_df)
+        pc = risk_per_capita(out)
+        pd.testing.assert_series_equal(
+            pc.reset_index(drop=True), out["p_failure"].reset_index(drop=True), check_names=False
+        )
+
+    def test_per_capita_requires_index_first(self, toy_district_df):
+        with pytest.raises(KeyError):
+            risk_per_capita(toy_district_df)
 
 
 # ---------------------------------------------------------------------------

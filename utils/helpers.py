@@ -86,6 +86,23 @@ def naive_baseline_risk(df: pd.DataFrame) -> pd.Series:
     return 1.0 - ur
 
 
+def risk_per_capita(df: pd.DataFrame) -> pd.Series:
+    """Per-capita view of risk: strip the Impact (volume) term so the composite
+    no longer privileges large districts.
+
+    With no Census table available, we use ``total_enrolments`` itself as a
+    population proxy. The composite already encodes
+    ``impact = log1p(total_enrolments)``, so
+    ``identity_maintenance_risk / log1p(total_enrolments)`` collapses to a
+    rescaled ``p_failure`` term. We return ``p_failure`` directly — same
+    ranking, clearer semantics — and document the equivalence here so a
+    reviewer doesn't have to re-derive it.
+    """
+    if "p_failure" not in df.columns:
+        raise KeyError("risk_per_capita expects calculate_risk_index() to have been run first")
+    return df["p_failure"].rename("risk_per_capita")
+
+
 # ---------------------------------------------------------------------------
 # Balance score
 # ---------------------------------------------------------------------------
@@ -212,6 +229,69 @@ def label_archetypes(
         labels[remaining_id] = "Emerging Hotspots (Proactive Camps)"
 
     return labels
+
+
+# ---------------------------------------------------------------------------
+# Temporal hold-out: are district rankings stable across time windows?
+# ---------------------------------------------------------------------------
+def temporal_holdout_rank_stability(
+    df_enrol: pd.DataFrame,
+    df_demo: pd.DataFrame,
+    date_col: str = "date",
+    group_col: str = "district",
+    holdout_months: int = 3,
+    enrol_age_cols: Iterable[str] = ("age_0_5", "age_5_17", "age_18_greater"),
+    demo_age_cols: Iterable[str] = ("demo_age_5_17", "demo_age_17_"),
+) -> dict:
+    """Compare risk rankings on an earlier window vs the most-recent N months.
+
+    The risk index is unsupervised, so we can't compute precision/recall, but
+    we *can* ask whether the priority list is stable when re-fit on a different
+    slice of time. High Spearman ρ → the ranking is a property of the
+    districts, not a property of which months we happened to look at.
+    """
+    enrol = df_enrol.copy()
+    demo = df_demo.copy()
+    enrol[date_col] = pd.to_datetime(enrol[date_col], errors="coerce", dayfirst=True)
+    demo[date_col] = pd.to_datetime(demo[date_col], errors="coerce", dayfirst=True)
+
+    enrol = enrol.dropna(subset=[date_col, group_col])
+    demo = demo.dropna(subset=[date_col, group_col])
+
+    cutoff = max(enrol[date_col].max(), demo[date_col].max()) - pd.DateOffset(months=holdout_months)
+
+    def _build(en: pd.DataFrame, de: pd.DataFrame) -> pd.DataFrame:
+        en_g = en.groupby(group_col)[list(enrol_age_cols)].sum().sum(axis=1).to_frame("total_enrolments")
+        up_g = de.groupby(group_col)[list(demo_age_cols)].sum().sum(axis=1).to_frame("total_updates")
+        out = en_g.join(up_g, how="inner").fillna(0)
+        out["update_rate"] = (
+            (out["total_updates"] / out["total_enrolments"]).replace([np.inf, -np.inf], np.nan).fillna(0)
+        )
+        bal = calculate_balance_score(de.rename(columns={group_col: "group"}).assign(group=de[group_col]))
+        out = out.join(bal, how="left").fillna(0).reset_index()
+        out = out[out["total_enrolments"] > CONFIG["thresholds"]["min_enrol_for_analysis"]]
+        return calculate_risk_index(out).set_index(group_col)["identity_maintenance_risk"]
+
+    early = _build(enrol[enrol[date_col] <= cutoff], demo[demo[date_col] <= cutoff])
+    late = _build(enrol[enrol[date_col] > cutoff], demo[demo[date_col] > cutoff])
+
+    common = early.index.intersection(late.index)
+    if len(common) < 5:
+        return {"n_common": int(len(common)), "spearman_rho": float("nan"), "cutoff": cutoff}
+
+    rho = early.loc[common].rank().corr(late.loc[common].rank(), method="spearman")
+    top20_early = set(early.loc[common].nlargest(20).index)
+    top20_late = set(late.loc[common].nlargest(20).index)
+    overlap = len(top20_early & top20_late) / 20.0
+
+    return {
+        "cutoff": cutoff,
+        "n_common": int(len(common)),
+        "n_early": int(len(early)),
+        "n_late": int(len(late)),
+        "spearman_rho": float(rho),
+        "top20_overlap": float(overlap),
+    }
 
 
 # ---------------------------------------------------------------------------

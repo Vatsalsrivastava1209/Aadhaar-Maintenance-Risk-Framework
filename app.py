@@ -27,7 +27,14 @@ from utils.helpers import (
     calculate_balance_score,
     calculate_risk_index,
     naive_baseline_risk,
+    risk_per_capita,
 )
+
+# Demo-mode fallback: when the full datasets/ folders are not present (typical
+# fresh-clone case, since they're gitignored for size), we boot off a small
+# committed sample under datasets/sample/. The app shows a banner so a recruiter
+# clicking through a resume link sees something instead of a blank "no data" screen.
+SAMPLE_BASE = Path("datasets/sample")
 
 
 # ---------------------------------------------------------------------------
@@ -42,33 +49,48 @@ def _load_csv_folder(folder: str) -> pd.DataFrame:
 
 
 def _clean_columns(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty:
+        # Empty frame from a missing folder — .str accessor would fail on the
+        # default RangeIndex.
+        return df
     df = df.copy()
     df.columns = df.columns.str.strip().str.lower().str.replace(" ", "_")
     return df
 
 
 @st.cache_data(show_spinner="Building district-level risk frame...")
-def build_district_frame() -> tuple[pd.DataFrame, dict]:
+def build_district_frame() -> tuple[pd.DataFrame, dict, bool]:
     base = Path("datasets")
     enrol = _clean_columns(_load_csv_folder(str(base / "api_data_aadhar_enrolment")))
     bio = _clean_columns(_load_csv_folder(str(base / "api_data_aadhar_biometric")))
     demo = _clean_columns(_load_csv_folder(str(base / "api_data_aadhar_demographic")))
 
+    demo_mode = False
     if enrol.empty or demo.empty:
-        st.error("Raw CSV folders not found under `datasets/`. See the notebook for the expected layout.")
-        st.stop()
+        # Fall back to the committed sample so the app boots out-of-the-box.
+        enrol = _clean_columns(_load_csv_folder(str(SAMPLE_BASE / "api_data_aadhar_enrolment")))
+        bio = _clean_columns(_load_csv_folder(str(SAMPLE_BASE / "api_data_aadhar_biometric")))
+        demo = _clean_columns(_load_csv_folder(str(SAMPLE_BASE / "api_data_aadhar_demographic")))
+        demo_mode = True
+        if enrol.empty or demo.empty:
+            st.error(
+                "Neither `datasets/` nor `datasets/sample/` contains the expected folders. "
+                "See the notebook for the expected layout."
+            )
+            st.stop()
 
     for df in (enrol, bio, demo):
         df["pincode"] = df["pincode"].astype(str).str.strip()
         if "state" in df.columns:
             df["state"] = df["state"].astype(str).str.strip().str.upper()
 
+    pincode_csv = (
+        str(SAMPLE_BASE / "pincode_directory_sample.csv")
+        if demo_mode and (SAMPLE_BASE / "pincode_directory_sample.csv").exists()
+        else CONFIG["files"]["pincode_mapping"]
+    )
     pincode_map = (
-        pd.read_csv(
-            CONFIG["files"]["pincode_mapping"],
-            usecols=["pincode", "district", "state"],
-            dtype={"pincode": str},
-        )
+        pd.read_csv(pincode_csv, usecols=["pincode", "district", "state"], dtype={"pincode": str})
         .drop_duplicates(subset="pincode")
         .set_index("pincode")
     )
@@ -106,9 +128,11 @@ def build_district_frame() -> tuple[pd.DataFrame, dict]:
     ].copy()
     district_df["baseline_risk"] = naive_baseline_risk(district_df)
 
+    district_df["risk_per_capita"] = risk_per_capita(district_df).values
+
     with open(CONFIG["files"]["district_geojson"], encoding="utf-8") as f:
         geo = json.load(f)
-    return district_df, geo
+    return district_df, geo, demo_mode
 
 
 # ---------------------------------------------------------------------------
@@ -121,7 +145,16 @@ st.caption(
     "Built from the same `utils.helpers` module as the analysis notebook."
 )
 
-district_df, districts_geo = build_district_frame()
+district_df, districts_geo, demo_mode = build_district_frame()
+
+if demo_mode:
+    st.warning(
+        "**Demo mode** — running on a small committed sample under `datasets/sample/` "
+        "because the full UIDAI extracts under `datasets/` were not found. "
+        "The risk index, archetype logic, and map are real; the numbers are not "
+        "production-grade. Drop the real extracts into `datasets/` to switch.",
+        icon=":material/info:",
+    )
 
 with st.sidebar:
     st.header("Filters")
@@ -132,8 +165,13 @@ with st.sidebar:
     )
     metric_choice = st.selectbox(
         "Map metric",
-        options=["identity_maintenance_risk", "p_failure", "impact", "update_rate"],
+        options=["identity_maintenance_risk", "risk_per_capita", "p_failure", "impact", "update_rate"],
         index=0,
+        help=(
+            "`identity_maintenance_risk` is the composite (P(failure) x Impact). "
+            "`risk_per_capita` strips the Impact (volume) term so large districts "
+            "stop dominating the map — useful as a secondary triage view."
+        ),
     )
     st.markdown("---")
     st.markdown(
@@ -161,7 +199,7 @@ fig = px.choropleth(
     locations="district",
     color=metric_choice,
     color_continuous_scale="Reds",
-    hover_data=["total_enrolments", "update_rate", "p_failure", "impact", "risk_level"],
+    hover_data=["total_enrolments", "update_rate", "p_failure", "impact", "risk_per_capita", "risk_level"],
 )
 fig.update_geos(fitbounds="locations", visible=False)
 fig.update_layout(height=600, margin={"r": 0, "t": 10, "l": 0, "b": 0})
