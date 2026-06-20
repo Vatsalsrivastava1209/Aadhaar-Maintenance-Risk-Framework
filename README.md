@@ -1,5 +1,18 @@
 # Aadhaar Identity Maintenance Risk Framework
 
+## Project Snapshot
+
+| | |
+|---|---|
+| **Business problem** | Prioritise where limited mobile Aadhaar update capacity should be deployed across 714 districts. |
+| **Quantified result** | The composite and naive rankings overlap in only **3 of the top 20**; however, the Aspirational District comparison is **not significant** (`p = 0.098`) and temporal top-20 overlap is only **10%**. |
+| **Method** | District aggregation, transparent composite scoring, KMeans archetypes, bias slices, temporal hold-out testing, NITI cross-reference, and Prophet forecasting. |
+| **Demo** | Run `streamlit run app.py`; a committed anonymised sample automatically enables demo mode. |
+| **Limitations** | No authentication-failure labels exist, weights are heuristic, population volume affects the score, and the available 10-month window cannot validate the forecast. |
+| **Reproduce** | `pip install -r requirements.txt` → `python tools/headline_numbers.py` → `streamlit run app.py`; verify with `pytest -q` and `ruff check .`. |
+
+![Risk distribution by enrolment-volume slice](plots/bias_slice.png)
+
 > District-level **prioritisation** engine that uses public Aadhaar
 > enrolment / update data to flag where stale records are most likely to
 > cause authentication failures and exclusion.
@@ -10,7 +23,7 @@
 > failures — there is no labelled ground truth for that anywhere in this
 > repo, and the headline numbers below are honest about it.
 
-[![CI](https://github.com/Vatsalsrivastava1209/Uidai-project/actions/workflows/ci.yml/badge.svg)](https://github.com/Vatsalsrivastava1209/Uidai-project/actions/workflows/ci.yml)
+[![CI](https://github.com/Vatsalsrivastava1209/Aadhaar-Maintenance-Risk-Framework/actions/workflows/ci.yml/badge.svg)](https://github.com/Vatsalsrivastava1209/Aadhaar-Maintenance-Risk-Framework/actions/workflows/ci.yml)
 
 ---
 
@@ -137,8 +150,8 @@ data accumulate.
 
 ```bash
 # 1. Clone
-git clone https://github.com/Vatsalsrivastava1209/Uidai-project.git
-cd Uidai-project
+git clone https://github.com/Vatsalsrivastava1209/Aadhaar-Maintenance-Risk-Framework.git
+cd Aadhaar-Maintenance-Risk-Framework
 
 # 2. Install (pinned versions)
 pip install -r requirements.txt
